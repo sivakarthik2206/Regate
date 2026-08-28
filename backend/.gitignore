@@ -1,0 +1,6 @@
+models/
+data/raw/
+notebooks/
+**/__pycache__/
+*.pyc
+.env

@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: #0a0f1e;
+  font-family: var(--font-sans), Inter, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a,
+button,
+[role="button"],
+input,
+select,
+textarea {
+  transition:
+    transform 180ms ease,
+    filter 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+button:hover,
+a:hover,
+[role="button"]:hover {
+  transform: translateY(-2px);
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+button:active,
+a:active,
+[role="button"]:active {
+  transform: translateY(0) scale(0.99);
+}

@@ -1,0 +1,27 @@
+# Next.js
+frontend/.next/
+frontend/node_modules/
+
+# Python
+backend/__pycache__/
+backend/*.pyc
+**/__pycache__/
+
+# Data files (too large for git)
+data/raw/
+backend/data/raw/
+backend/data/processed/
+data/processed/
+
+# Models (go to GCS)
+models/
+backend/models/*.pkl
+
+# Environment
+.env
+.env.local
+frontend/.env.local
+
+# OS
+.DS_Store
+Thumbs.db
