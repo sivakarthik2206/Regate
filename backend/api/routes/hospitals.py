@@ -82,4 +82,10 @@ def get_hospital(provider_id: str) -> dict:
     if row.empty:
         raise HTTPException(status_code=404, detail="Hospital not found")
     record = row.iloc[0].to_dict()
-    return record
+    renames = {
+        "hospital_name": "name",
+        "hospital_ownership": "ownership_type",
+        "overall_rating": "star_rating",
+        "payment_reduction_pct": "penalty_pct",
+    }
+    return {renames.get(k, k): v for k, v in record.items()}

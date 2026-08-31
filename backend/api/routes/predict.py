@@ -10,6 +10,28 @@ from api.schemas.predict import HospitalRiskInput, HospitalRiskOutput, PatientRi
 
 router = APIRouter(prefix="/predict", tags=["predict"])
 
+FEATURE_LABELS: dict[str, str] = {
+    "mean_readmission_rate": "Mean Readmission Rate",
+    "avg_readmission_rate": "Mean Readmission Rate",
+    "conditions_above_national": "Conditions Above National Average",
+    "has_emergency_services": "Emergency Services Available",
+    "ownership_encoded": "Hospital Ownership Type",
+    "ownership_type": "Hospital Ownership Type",
+    "star_rating_numeric": "Overall Quality Star Rating",
+    "star_rating": "Overall Quality Star Rating",
+    "time_in_hospital": "Length of Hospital Stay",
+    "num_medications": "Number of Medications",
+    "number_diagnoses": "Number of Diagnoses",
+    "num_lab_procedures": "Number of Lab Procedures",
+    "num_procedures": "Number of Procedures",
+    "a1c_result": "HbA1c Test Result",
+    "insulin": "Insulin Regimen",
+    "diabetes_med": "Diabetes Medication",
+    "age": "Patient Age",
+}
+
+_CONDITION_NAMES = ["AMI", "Heart Failure", "Pneumonia", "COPD", "Hip/Knee", "CABG"]
+
 
 def _get_store(request: Request):
     store = getattr(request.app.state, "model_store", None)
@@ -47,37 +69,80 @@ def _patient_risk_level(probability: float) -> str:
 
 
 def _top_factors_from_values(values: dict[str, Any], importance: dict[str, float], top_n: int = 5) -> list[dict]:
-    scored = []
-    for feature, imp in importance.items():
-        scored.append({"factor": feature, "impact": "high" if imp > 0.15 else "medium" if imp > 0.05 else "low", "value": values.get(feature)})
+    scored = [
+        {
+            "factor": feature,
+            "label": FEATURE_LABELS.get(feature, feature.replace("_", " ").title()),
+            "value": values.get(feature),
+        }
+        for feature, imp in importance.items()
+    ]
     scored.sort(key=lambda item: importance.get(item["factor"], 0.0), reverse=True)
-    return scored[:top_n]
+    top = scored[:top_n]
+    for i, item in enumerate(top):
+        item["impact"] = "high" if i < 2 else "medium" if i == 2 else "low"
+    return top
 
 
 def _recommendations_for_hospital(payload: HospitalRiskInput) -> list[str]:
     recs = []
-    if payload.conditions_above_national >= 4:
-        recs.append("Prioritize condition-specific discharge planning and follow-up scheduling.")
-    if payload.has_emergency_services:
-        recs.append("Review ED utilization and observation workflows for avoidable admissions.")
+
+    if payload.avg_readmission_rate > 15.0:
+        recs.append("Implement transitional care programs for high-risk discharges including 48-hour post-discharge phone follow-up.")
+
+    if payload.conditions_above_national >= 3:
+        # Find the worst condition from individual rate fields if available
+        condition_rates = {
+            "AMI": payload.ami_readmission_rate,
+            "Heart Failure": payload.hf_readmission_rate,
+            "Pneumonia": payload.pneumonia_readmission_rate,
+            "COPD": payload.copd_readmission_rate,
+            "Hip/Knee": payload.hip_knee_readmission_rate,
+            "CABG": payload.cabg_readmission_rate,
+        }
+        available = {k: v for k, v in condition_rates.items() if v is not None}
+        if available:
+            worst = max(available, key=lambda c: available[c])
+            recs.append(f"Target quality improvement on {worst} — currently the highest readmission rate among tracked conditions.")
+        else:
+            recs.append("Target quality improvement on conditions with the highest gap versus national benchmark.")
+    elif payload.conditions_above_national >= 1:
+        recs.append("Engage condition-specific clinical teams to close the gap on conditions performing below national average.")
+
     if payload.star_rating is not None and payload.star_rating <= 2:
-        recs.append("Target quality-improvement initiatives tied to patient experience and care coordination.")
+        recs.append("Address patient experience metrics contributing to low overall star rating, focusing on communication and care coordination scores.")
+
     if payload.ownership_type.lower().startswith("proprietary"):
-        recs.append("Benchmark performance against peer-owned facilities and reduce avoidable readmissions.")
-    return recs or ["Maintain current quality programs and monitor readmission drivers."]
+        recs.append("Benchmark readmission prevention spending against non-profit peers and evaluate care management program investment.")
+
+    if payload.has_emergency_services:
+        recs.append("Review ED-to-observation workflows to reduce avoidable inpatient admissions that inflate readmission denominators.")
+
+    return recs or ["Maintain current quality programs and continue monitoring readmission drivers quarterly."]
 
 
 def _recommendations_for_patient(payload: PatientRiskInput) -> list[str]:
     recs = []
+
     if payload.time_in_hospital > 5:
-        recs.append("Strengthen discharge planning and medication reconciliation.")
+        recs.append("Strengthen discharge planning with a structured checklist and schedule follow-up appointment before patient leaves the facility.")
+
     if payload.num_medications > 10:
-        recs.append("Review polypharmacy and simplify the regimen where clinically appropriate.")
+        recs.append("Conduct pharmacist-led medication reconciliation and simplify regimen where clinically appropriate to reduce polypharmacy risk.")
+
     if payload.number_diagnoses > 7:
-        recs.append("Escalate case management and ensure timely outpatient follow-up.")
+        recs.append("Escalate to case management for coordinated post-discharge care and timely outpatient specialist follow-up.")
+
     if payload.diabetes_med:
-        recs.append("Ensure diabetes self-management education and glucose monitoring support.")
-    return recs or ["Continue standard follow-up and medication adherence counseling."]
+        recs.append("Provide diabetes self-management education and ensure glucose monitoring supplies are prescribed before discharge.")
+
+    if payload.insulin != "No":
+        recs.append("Confirm insulin administration technique and arrange home health nursing for insulin-dependent patients.")
+
+    if payload.a1c_result in (">7", ">8"):
+        recs.append("Refer to endocrinology or diabetes care team for optimized glycemic management plan.")
+
+    return recs or ["Continue standard follow-up protocol and reinforce medication adherence counseling at discharge."]
 
 
 def _importance_from_model(model: Any, feature_names: list[str]) -> dict[str, float]:
@@ -173,14 +238,15 @@ def hospital_demo() -> HospitalRiskOutput:
         estimated_penalty_pct=1.25,
         estimated_dollar_impact=625_000.0,
         top_risk_factors=[
-            {"factor": "conditions_above_national", "impact": "high", "value": 5},
-            {"factor": "avg_readmission_rate", "impact": "high", "value": 24.8},
-            {"factor": "star_rating", "impact": "medium", "value": 2},
+            {"factor": "conditions_above_national", "label": "Conditions Above National Average", "impact": "high", "value": 5},
+            {"factor": "avg_readmission_rate", "label": "Mean Readmission Rate", "impact": "high", "value": 24.8},
+            {"factor": "star_rating", "label": "Overall Quality Star Rating", "impact": "medium", "value": 2},
         ],
         recommendations=[
-            "Reduce condition-specific readmissions through discharge bundles.",
-            "Prioritize high-risk patient navigation within 7 days post-discharge.",
-            "Review coding and care transition workflows.",
+            "Implement transitional care programs for high-risk discharges including 48-hour post-discharge phone follow-up.",
+            "Target quality improvement on Heart Failure — currently the highest readmission rate among tracked conditions.",
+            "Address patient experience metrics contributing to low overall star rating, focusing on communication and care coordination scores.",
+            "Benchmark readmission prevention spending against non-profit peers and evaluate care management program investment.",
         ],
     )
 
@@ -191,14 +257,15 @@ def patient_demo() -> PatientRiskOutput:
         readmission_probability=0.67,
         risk_level="High",
         top_risk_factors=[
-            {"factor": "time_in_hospital", "impact": "high", "value": 8},
-            {"factor": "num_medications", "impact": "high", "value": 18},
-            {"factor": "number_diagnoses", "impact": "medium", "value": 9},
+            {"factor": "time_in_hospital", "label": "Length of Hospital Stay", "impact": "high", "value": 8},
+            {"factor": "num_medications", "label": "Number of Medications", "impact": "high", "value": 18},
+            {"factor": "number_diagnoses", "label": "Number of Diagnoses", "impact": "medium", "value": 9},
         ],
         recommended_interventions=[
-            "Schedule follow-up within 7 days.",
-            "Perform medication reconciliation before discharge.",
-            "Provide diabetes self-management education.",
+            "Strengthen discharge planning with a structured checklist and schedule follow-up appointment before patient leaves the facility.",
+            "Conduct pharmacist-led medication reconciliation and simplify regimen where clinically appropriate to reduce polypharmacy risk.",
+            "Escalate to case management for coordinated post-discharge care and timely outpatient specialist follow-up.",
+            "Provide diabetes self-management education and ensure glucose monitoring supplies are prescribed before discharge.",
         ],
         estimated_cost_if_readmitted=15200.0,
     )
