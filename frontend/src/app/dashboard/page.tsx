@@ -1,223 +1,350 @@
 "use client";
 
-import React from "react";
+import { motion, type Variants } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, RefreshCw } from "lucide-react";
 import {
-  getSummary,
-  getPenaltiesByState,
+  getBacktesting,
   getFeatureImportance,
-  getReadmissionRates,
-  DEMO_SUMMARY,
-  DEMO_PENALTIES_BY_STATE,
-  DEMO_FEATURE_IMPORTANCE,
-  DEMO_READMISSION_RATES,
+  getPenaltiesByOwnership,
+  getPenaltiesByState,
+  getReadmissionBenchmarks,
+  getSummary,
 } from "@/lib/api";
+import type { BacktestSample, PenaltiesByStateItem } from "@/lib/types";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
-import { StatePenaltyMap } from "@/components/charts/StatePenaltyMap";
-import { OwnershipChart } from "@/components/charts/OwnershipChart";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { DemoBanner } from "@/components/ui/DemoBanner";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { USMap } from "@/components/charts/USMap";
+import { OwnershipDonut } from "@/components/charts/OwnershipDonut";
 import { ReadmissionRatesChart } from "@/components/charts/ReadmissionRatesChart";
 import { FeatureImportanceChart } from "@/components/charts/FeatureImportanceChart";
-import { StatesTable } from "@/components/ui/StatesTable";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { ConfusionMatrix } from "@/components/charts/ConfusionMatrix";
+import { cn, formatNumber } from "@/lib/utils";
 
-export default function DashboardPage(): JSX.Element {
-  // Use React Query for data fetching
-  const summaryQuery = useQuery({
-    queryKey: ["summary"],
-    queryFn: getSummary,
-    retry: 1,
-  });
+/** Clamp a percentage into 0-100, guarding against double-scaled (>100) values. */
+function pct(value: number | null | undefined): number | null {
+  if (value === null || value === undefined || Number.isNaN(value)) return null;
+  return value > 100 ? value / 100 : value;
+}
 
-  const stateQuery = useQuery({
-    queryKey: ["penaltiesByState"],
-    queryFn: getPenaltiesByState,
-    retry: 1,
-  });
+export default function DashboardPage() {
+  const summary = useQuery({ queryKey: ["summary"], queryFn: getSummary });
+  const states = useQuery({ queryKey: ["states"], queryFn: getPenaltiesByState });
+  const ownership = useQuery({ queryKey: ["ownership"], queryFn: getPenaltiesByOwnership });
+  const benchmarks = useQuery({ queryKey: ["benchmarks"], queryFn: getReadmissionBenchmarks });
+  const features = useQuery({ queryKey: ["feature-importance"], queryFn: getFeatureImportance });
+  const backtest = useQuery({ queryKey: ["backtesting"], queryFn: getBacktesting });
 
-  const importanceQuery = useQuery({
-    queryKey: ["featureImportance"],
-    queryFn: getFeatureImportance,
-    retry: 1,
-  });
-
-  const readmissionQuery = useQuery({
-    queryKey: ["readmissionRates"],
-    queryFn: getReadmissionRates,
-    retry: 1,
-  });
-
-  const isLoading =
-    summaryQuery.isLoading ||
-    stateQuery.isLoading ||
-    importanceQuery.isLoading ||
-    readmissionQuery.isLoading;
-
-  const demoMode =
-    summaryQuery.isError ||
-    stateQuery.isError ||
-    importanceQuery.isError ||
-    readmissionQuery.isError;
-
-  // Aggregate stats / data
-  const summary = summaryQuery.data || DEMO_SUMMARY;
-  const penaltiesByState = stateQuery.data || DEMO_PENALTIES_BY_STATE;
-  const featureImportance = importanceQuery.data || DEMO_FEATURE_IMPORTANCE;
-  const readmissionRates = readmissionQuery.data || DEMO_READMISSION_RATES;
-
-  // Format Estimated Penalties (e.g. $142m)
-  const formatEstimatedPenalties = (amount: number): string => {
-    if (amount >= 1e9) {
-      return `$${(amount / 1e9).toFixed(1)}b`;
-    }
-    return `$${(amount / 1e6).toFixed(0)}m`;
-  };
-
-  const handleRefetch = () => {
-    summaryQuery.refetch();
-    stateQuery.refetch();
-    importanceQuery.refetch();
-    readmissionQuery.refetch();
-  };
+  const s = summary.data;
 
   return (
-    <main className="min-h-screen px-4 py-8 md:px-10 md:py-10">
-      <section className="mx-auto max-w-7xl space-y-8">
-        {/* Header Block */}
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
-            <h1 className="font-display text-4xl font-bold tracking-tight text-white">
-              Regate Executive Dashboard
-            </h1>
-            <p className="mt-1.5 text-sm text-white/50">
-              Real-time analytics on CMS Hospital Readmissions Reduction Program (HRRP) exposure.
-            </p>
-          </div>
+    <div>
+      <DemoBanner />
+      <PageHeader
+        eyebrow="Analytics Command Center"
+        title="National HRRP Penalty Dashboard"
+        subtitle={
+          s
+            ? `${formatNumber(s.total_hospitals)} hospitals analyzed · Predictions apply to ${s.predictions_apply_to} · CMS performance period ${s.cms_performance_period}`
+            : "Loading national readmission penalty intelligence…"
+        }
+      />
 
-          <div className="flex items-center gap-3">
-            {demoMode && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber/20 bg-amber/10 px-3.5 py-1 text-xs font-semibold text-amber shadow-[0_0_15px_rgba(247,168,0,0.1)]">
-                <AlertCircle className="h-3.5 w-3.5" />
-                Demo Mode
-              </span>
-            )}
-            <button
-              onClick={handleRefetch}
-              disabled={isLoading}
-              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-medium text-white transition hover:bg-white/10 active:scale-95 disabled:opacity-50"
-            >
-              <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
-              Sync Data
-            </button>
+      {/* ROW 1 — KPI stat cards */}
+      {summary.isLoading || !s ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} variant="card" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard title="Hospitals Analyzed" value={s.total_hospitals} accentColor="cyan" subtitle="With CMS ERR data" />
+          <StatCard title="Currently Penalized" value={s.total_penalized} accentColor="risk" subtitle={`${(pct(s.penalty_rate_pct) ?? 0).toFixed(1)}% penalty rate`} />
+          <StatCard title="Avg Penalty Rate" value={s.avg_penalty_pct} decimals={2} suffix="%" accentColor="amber" subtitle={`Median ${s.median_penalty_pct.toFixed(2)}%`} />
+          <StatCard title="Est. Total Penalties" value={s.estimated_total_penalties_usd} prefix="$" compact accentColor="safe" subtitle="Across all hospitals" />
+        </div>
+      )}
+
+      {/* ROW 2 — US map + ownership donut */}
+      <Section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <div className="card p-5 lg:col-span-3">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold text-white">Penalty Rate by State</h2>
+            <span className="text-xs text-slate-500">Hover a state for detail</span>
           </div>
+          {states.isLoading || !states.data ? (
+            <Skeleton variant="chart" className="border-0 bg-transparent p-0" />
+          ) : (
+            <>
+              <USMap data={states.data} />
+              <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+                Showing {states.data.length} states with complete CMS Excess Readmission Ratio data.
+                States in gray have insufficient data for penalty analysis.
+              </p>
+            </>
+          )}
         </div>
 
-        {/* Error/Demo Banner */}
-        {demoMode && (
-          <div className="relative overflow-hidden rounded-[20px] border border-amber/30 bg-gradient-to-r from-amber/20 to-transparent p-5">
-            <div className="flex items-start gap-4">
-              <div className="rounded-xl bg-amber/20 p-2 text-amber">
-                <AlertCircle className="h-5 w-5" />
+        <div className="card p-5 lg:col-span-2">
+          <h2 className="mb-4 font-display text-lg font-semibold text-white">Penalty Rate by Ownership</h2>
+          {ownership.isLoading || !ownership.data ? (
+            <Skeleton variant="chart" className="border-0 bg-transparent p-0" />
+          ) : (
+            <OwnershipDonut data={ownership.data} />
+          )}
+        </div>
+      </Section>
+
+      {/* ROW 3 — readmission rates */}
+      <Section className="mt-6">
+        <div className="card p-5">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold text-white">
+              Readmission Rates by Condition
+            </h2>
+            <span className="text-xs text-slate-500">National vs penalized vs safe hospitals</span>
+          </div>
+          {benchmarks.isLoading || !benchmarks.data ? (
+            <Skeleton variant="chart" className="border-0 bg-transparent p-0" />
+          ) : (
+            <ReadmissionRatesChart data={benchmarks.data} />
+          )}
+        </div>
+      </Section>
+
+      {/* ROW 4 — feature importance + top states table */}
+      <Section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="card p-5">
+          <h2 className="mb-4 font-display text-lg font-semibold text-white">
+            What Drives the Prediction
+          </h2>
+          {features.isLoading || !features.data ? (
+            <Skeleton variant="chart" className="border-0 bg-transparent p-0" />
+          ) : (
+            <FeatureImportanceChart data={features.data} />
+          )}
+        </div>
+
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold text-white">Top Penalized States</h2>
+            <span className="text-xs text-slate-500">Ranked by penalty rate</span>
+          </div>
+          {states.isLoading || !states.data ? (
+            <Skeleton variant="chart" />
+          ) : (
+            <TopStatesTable data={states.data} />
+          )}
+        </div>
+      </Section>
+
+      {/* ROW 5 — backtesting validation */}
+      <Section className="mt-6">
+        <div className="card p-6">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-safe" />
+            <h2 className="font-display text-lg font-semibold text-white">
+              Model Validation Against Actual CMS Penalties
+            </h2>
+          </div>
+          <p className="mb-6 text-sm text-slate-400">
+            Predictions cross-checked against real HRRP outcomes for a held-out set of hospitals.
+          </p>
+
+          {backtest.isLoading || !backtest.data ? (
+            <Skeleton variant="chart" className="border-0 bg-transparent p-0" />
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Confusion Matrix · {formatNumber(backtest.data.total_hospitals_tested)} hospitals tested
+                  </p>
+                  <ConfusionMatrix
+                    truePositive={backtest.data.correctly_predicted_penalized}
+                    trueNegative={backtest.data.correctly_predicted_safe}
+                    falsePositive={backtest.data.false_positives}
+                    falseNegative={backtest.data.false_negatives}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <StatCard title="Accuracy" value={backtest.data.accuracy_pct} decimals={1} suffix="%" accentColor="cyan" />
+                  <StatCard title="Precision" value={backtest.data.precision_pct} decimals={1} suffix="%" accentColor="safe" />
+                  <StatCard title="Recall" value={backtest.data.recall_pct} decimals={1} suffix="%" accentColor="amber" />
+                  <StatCard title="F1 Score" value={backtest.data.f1_pct} decimals={1} suffix="%" accentColor="cyan" />
+                </div>
               </div>
-              <div>
-                <h4 className="font-display font-semibold text-white">
-                  Running in demo mode — connect the API for live data
-                </h4>
-                <p className="mt-1 text-xs text-white/60">
-                  We could not reach the backend service at{" "}
-                  <code className="rounded bg-navy-950 px-1 py-0.5 text-[10px] text-amber">
-                    {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}
-                  </code>
-                  . Rendering realistic national Medicare datasets.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* FIRST ROW: KPI STAT CARDS */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {isLoading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={`kpi-sk-${i}`} className="h-32" />
-            ))
-          ) : (
-            <>
-              <StatCard
-                title="Hospitals Analyzed"
-                value={summary.total_hospitals_analyzed.toLocaleString()}
-                subtitle="CMS Registry matching filters"
-                trend="neutral"
-                trendValue="v1.0"
-                accentColor="cyan"
-              />
-              <StatCard
-                title="Currently Penalized"
-                value={summary.total_penalized.toLocaleString()}
-                subtitle={`${summary.penalty_rate_pct?.toFixed(1)}% of registry`}
-                trend="up"
-                trendValue="+1.2%"
-                accentColor="risk-red"
-              />
-              <StatCard
-                title="Avg Penalty Rate"
-                value={`${summary.avg_penalty_pct?.toFixed(1)}%`}
-                subtitle="Mean HRRP reimbursement cut"
-                trend="down"
-                trendValue="-0.4%"
-                accentColor="amber"
-              />
-              <StatCard
-                title="Est. Total Penalties"
-                value={formatEstimatedPenalties(summary.estimated_total_penalties_usd)}
-                subtitle="Aggregated annual risk"
-                trend="neutral"
-                trendValue="Annual"
-                accentColor="safe-green"
-              />
+              <BacktestSampleTable samples={backtest.data.sample_predictions} />
+
+              <p className="mt-4 text-xs italic text-slate-500">
+                This model was validated against actual CMS HRRP penalty data.
+              </p>
             </>
           )}
         </div>
+      </Section>
 
-        {/* SECOND ROW: US choropleth map + Penalty by Ownership donut */}
-        <div className="grid gap-6 lg:grid-cols-[60%_40%]">
-          {isLoading ? (
-            <>
-              <Skeleton className="h-[430px]" />
-              <Skeleton className="h-[430px]" />
-            </>
-          ) : (
-            <>
-              <StatePenaltyMap data={penaltiesByState} />
-              <OwnershipChart data={summary.penalty_by_ownership} />
-            </>
-          )}
-        </div>
+      {/* ROW 6 — data freshness */}
+      <p className="mt-6 text-center text-xs text-slate-600">
+        Data last updated: {s?.data_last_updated ?? "June 2024"} · Predictions apply to:{" "}
+        {s?.predictions_apply_to ?? "FY2027"} · Performance period:{" "}
+        {s?.cms_performance_period ?? "July 2021 – June 2024"}
+      </p>
+    </div>
+  );
+}
 
-        {/* THIRD ROW: Readmission rates comparison bar chart */}
-        <div className="w-full">
-          {isLoading ? (
-            <Skeleton className="h-[400px]" />
-          ) : (
-            <ReadmissionRatesChart data={readmissionRates} />
-          )}
-        </div>
+/* ------------------------------------------------------------------ */
+/* Top penalized states table                                          */
+/* ------------------------------------------------------------------ */
 
-        {/* FOURTH ROW: Feature importance + Top penalized states table */}
-        <div className="grid gap-6 md:grid-cols-2">
-          {isLoading ? (
-            <>
-              <Skeleton className="h-[400px]" />
-              <Skeleton className="h-[400px]" />
-            </>
-          ) : (
-            <>
-              <FeatureImportanceChart data={featureImportance} />
-              <StatesTable data={penaltiesByState} />
-            </>
-          )}
-        </div>
-      </section>
-    </main>
+function RateBadge({ rate }: { rate: number | null }) {
+  if (rate === null) return <span className="text-slate-500">—</span>;
+  const tone =
+    rate > 50
+      ? "bg-risk/15 text-risk-light border-risk/30"
+      : rate >= 30
+        ? "bg-amber/15 text-amber-light border-amber/30"
+        : "bg-safe/15 text-safe-light border-safe/30";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums",
+        tone,
+      )}
+    >
+      {rate.toFixed(1)}%
+    </span>
+  );
+}
+
+function TopStatesTable({ data }: { data: PenaltiesByStateItem[] }) {
+  const rows = [...data]
+    .map((r) => ({ ...r, penalty_rate_pct: pct(r.penalty_rate_pct) ?? 0 }))
+    .sort((a, b) => b.penalty_rate_pct - a.penalty_rate_pct)
+    .slice(0, 15);
+
+  const columns: Column<(typeof rows)[number]>[] = [
+    {
+      key: "state",
+      header: "State",
+      accessor: (r) => r.state_name,
+      render: (r) => (
+        <span className="font-medium text-white">
+          {r.state_name}
+          <span className="ml-1.5 text-xs text-slate-500">{r.state}</span>
+        </span>
+      ),
+    },
+    { key: "penalized", header: "Penalized", align: "right", accessor: (r) => r.penalized_count, render: (r) => <span className="tabular-nums">{formatNumber(r.penalized_count)}</span> },
+    { key: "total", header: "Total", align: "right", accessor: (r) => r.total_count, render: (r) => <span className="tabular-nums text-slate-400">{formatNumber(r.total_count)}</span> },
+    { key: "rate", header: "Rate", align: "right", accessor: (r) => r.penalty_rate_pct, render: (r) => <RateBadge rate={r.penalty_rate_pct} /> },
+    { key: "avg", header: "Avg Penalty", align: "right", accessor: (r) => r.avg_penalty_pct, render: (r) => <span className="tabular-nums text-amber-light">{r.avg_penalty_pct.toFixed(2)}%</span> },
+  ];
+
+  return <DataTable columns={columns} data={rows} rowKey={(r) => r.state} pageSize={15} />;
+}
+
+/* ------------------------------------------------------------------ */
+/* Backtesting sample predictions table                                */
+/* ------------------------------------------------------------------ */
+
+function BacktestSampleTable({ samples }: { samples: BacktestSample[] }) {
+  const rows = samples.slice(0, 20);
+  return (
+    <div className="mt-6">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+        Validation Predictions
+      </p>
+      <div className="max-h-80 overflow-auto rounded-xl border border-navy-300">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 z-10 bg-navy-200/95 backdrop-blur">
+            <tr className="text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <th className="px-3 py-2.5">Hospital</th>
+              <th className="px-3 py-2.5">State</th>
+              <th className="px-3 py-2.5">Predicted</th>
+              <th className="px-3 py-2.5">Actual</th>
+              <th className="px-3 py-2.5 text-right">Pred. Prob</th>
+              <th className="px-3 py-2.5 text-right">Actual Penalty</th>
+              <th className="px-3 py-2.5 text-center">Correct?</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr
+                key={`${row.provider_id ?? "row"}-${i}`}
+                className={cn(
+                  "border-t border-navy-300/40",
+                  row.correct ? "bg-safe/[0.06]" : "bg-risk/[0.06]",
+                )}
+              >
+                <td className="px-3 py-2.5 text-slate-200">{row.hospital_name ?? "—"}</td>
+                <td className="px-3 py-2.5 text-slate-400">{row.state ?? "—"}</td>
+                <td className="px-3 py-2.5">
+                  <StatusPill on={row.predicted_penalized} labelOn="Penalized" labelOff="Safe" />
+                </td>
+                <td className="px-3 py-2.5">
+                  <StatusPill on={row.actually_penalized} labelOn="Penalized" labelOff="Safe" />
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">
+                  {row.predicted_probability !== null
+                    ? `${(row.predicted_probability * 100).toFixed(0)}%`
+                    : "—"}
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">
+                  {row.actual_penalty_pct !== null ? `${row.actual_penalty_pct.toFixed(2)}%` : "—"}
+                </td>
+                <td className="px-3 py-2.5 text-center">
+                  <span className={row.correct ? "text-safe-light" : "text-risk-light"}>
+                    {row.correct ? "✓" : "✕"}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ on, labelOn, labelOff }: { on: boolean; labelOn: string; labelOff: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+        on ? "bg-risk/15 text-risk-light" : "bg-safe/15 text-safe-light",
+      )}
+    >
+      <span className={cn("h-1.5 w-1.5 rounded-full", on ? "bg-risk" : "bg-safe")} />
+      {on ? labelOn : labelOff}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Scroll-in section wrapper                                           */
+/* ------------------------------------------------------------------ */
+
+const sectionVariants: Variants = {
+  hidden: { opacity: 0, y: 28 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: "easeOut" } },
+};
+
+function Section({ className, children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <motion.section
+      variants={sectionVariants}
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true, amount: 0.15 }}
+      className={className}
+    >
+      {children}
+    </motion.section>
   );
 }

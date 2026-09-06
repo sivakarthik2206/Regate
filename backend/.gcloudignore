@@ -1,0 +1,12 @@
+data/raw/
+data/processed/
+models/
+__pycache__/
+*.pyc
+*.parquet
+.env
+.env.local
+.venv/
+notebooks/
+Dockerfile.train
+requirements_train.txt
