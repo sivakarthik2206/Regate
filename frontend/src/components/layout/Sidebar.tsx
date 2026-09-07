@@ -1,123 +1,180 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Building2, Info, LayoutDashboard, Menu, X } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Activity,
+  Brain,
+  Building2,
+  Home,
+  Info,
+  LayoutDashboard,
+  Menu,
+  Sliders,
+  X,
+} from "lucide-react";
+import { useAPIHealth } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
-type NavItem = {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-};
-
-const navItems: NavItem[] = [
+const NAV = [
+  { href: "/", label: "Home", icon: Home },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/predict", label: "Risk Calculator", icon: Activity },
   { href: "/hospitals", label: "Hospitals", icon: Building2 },
+  { href: "/predict", label: "Risk Calculator", icon: Activity },
+  { href: "/simulate", label: "Interventions", icon: Sliders },
+  { href: "/model", label: "Model", icon: Brain },
   { href: "/about", label: "About", icon: Info },
 ];
 
-export function Sidebar(): JSX.Element {
+export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const health = useAPIHealth();
 
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname.startsWith(href);
+
+  const NavList = () => (
+    <nav className="flex flex-1 flex-col gap-0.5 px-3">
+      {NAV.map(({ href, label, icon: Icon }) => {
+        const active = isActive(href);
+        return (
+          <Link
+            key={href}
+            href={href}
+            onClick={() => setOpen(false)}
+            className={cn(
+              "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
+              active
+                ? "bg-white/[0.08] text-white"
+                : "text-white/40 hover:bg-white/[0.04] hover:text-white/80",
+            )}
+          >
+            {active && (
+              <motion.span
+                layoutId="sidebar-active"
+                className="absolute inset-0 rounded-xl bg-white/[0.08]"
+                transition={{ type: "spring", stiffness: 400, damping: 35 }}
+              />
+            )}
+            <Icon
+              className={cn(
+                "relative z-10 h-[17px] w-[17px] transition-colors",
+                active ? "text-white" : "text-white/40 group-hover:text-white/70",
+              )}
+            />
+            <span className="relative z-10">{label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+
+  const Brand = () => (
+    <Link
+      href="/"
+      onClick={() => setOpen(false)}
+      className="flex items-center gap-2.5 px-6 py-6"
+    >
+      <span className="font-display text-[22px] font-bold tracking-tight text-white">
+        Regate
+      </span>
+      <span className="h-1.5 w-1.5 rounded-full bg-white" />
+    </Link>
+  );
+
+  const Footer = () => {
+    const statusLabel = health.connecting
+      ? "Connecting…"
+      : health.demo
+        ? "Demo mode"
+        : health.isLive
+          ? "Live"
+          : "Connecting…";
+    const dotColor = health.connecting
+      ? "bg-white/30"
+      : health.isLive && !health.demo
+        ? "bg-safe"
+        : "bg-amber";
+    const pingColor = health.isLive && !health.demo && !health.connecting ? "animate-ping bg-safe" : "";
+    return (
+      <div className="border-t border-white/[0.06] px-6 py-4">
+        <span className="inline-flex items-center gap-2 text-xs font-medium text-white/40">
+          <span className="relative flex h-1.5 w-1.5">
+            {pingColor && (
+              <span className={cn("absolute inline-flex h-full w-full rounded-full opacity-75", pingColor)} />
+            )}
+            <span className={cn("relative inline-flex h-1.5 w-1.5 rounded-full", dotColor)} />
+          </span>
+          {statusLabel}
+        </span>
+      </div>
+    );
+  };
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[240px] flex-col border-r border-white/8 bg-[rgba(26,35,64,0.96)] px-5 py-6 text-white/80 backdrop-blur md:flex">
-        <SidebarContent pathname={pathname} />
-      </aside>
-
-      <div className="fixed left-4 top-4 z-40 md:hidden">
+      {/* Mobile top bar */}
+      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-white/[0.06] bg-black px-4 py-3 lg:hidden">
+        <span className="font-display text-xl font-bold text-white">
+          Regate
+          <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-white align-middle" />
+        </span>
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-2xl border border-white/10 bg-[rgba(26,35,64,0.95)] p-3 text-white shadow-lg"
-          aria-label="Open navigation menu"
+          aria-label="Open navigation"
+          className="rounded-lg border border-white/[0.08] p-2 text-white/50 transition-colors hover:text-white"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-4 w-4" />
         </button>
       </div>
 
+      {/* Desktop sidebar */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-white/[0.06] bg-black lg:flex">
+        <Brand />
+        <NavList />
+        <Footer />
+      </aside>
+
+      {/* Mobile drawer */}
       <AnimatePresence>
-        {open ? (
-          <>
+        {open && (
+          <div className="fixed inset-0 z-50 lg:hidden">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/60 md:hidden"
+              className="absolute inset-0 bg-black/80"
               onClick={() => setOpen(false)}
+              aria-hidden
             />
             <motion.aside
-              initial={{ x: -280 }}
+              initial={{ x: "-100%" }}
               animate={{ x: 0 }}
-              exit={{ x: -280 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-white/8 bg-[rgba(26,35,64,0.98)] px-5 py-6 text-white/80 backdrop-blur md:hidden"
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", stiffness: 400, damping: 40 }}
+              className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-white/[0.06] bg-black"
             >
-              <div className="mb-6 flex items-center justify-between">
-                <span className="font-display text-3xl font-bold tracking-tight text-white">Regate</span>
-                <button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-white/10 p-2 text-white/70">
-                  <X className="h-5 w-5" />
+              <div className="flex items-center justify-between pr-4">
+                <Brand />
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close navigation"
+                  className="rounded-lg p-2 text-white/40 transition-colors hover:text-white"
+                >
+                  <X className="h-4 w-4" />
                 </button>
               </div>
-              <SidebarContent pathname={pathname} />
+              <NavList />
+              <Footer />
             </motion.aside>
-          </>
-        ) : null}
+          </div>
+        )}
       </AnimatePresence>
-    </>
-  );
-}
-
-function SidebarContent({ pathname }: { pathname: string }): JSX.Element {
-  return (
-    <>
-      <div className="leading-none">
-        <div className="flex items-start gap-1.5">
-          <span className="font-display text-3xl font-bold tracking-tight text-white">Regate</span>
-          <span className="mt-1 text-[10px] font-semibold text-white/50">®</span>
-        </div>
-        <div className="mt-2 h-0.5 w-14 rounded-full bg-cyan shadow-[0_0_24px_rgba(0,212,255,0.9)]" />
-      </div>
-
-      <nav className="mt-10 flex flex-1 flex-col gap-2">
-        {navItems.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "group flex items-center gap-3 rounded-2xl border-l-2 px-4 py-3 transition",
-                active
-                  ? "border-cyan bg-cyan/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                  : "border-transparent hover:border-cyan/50 hover:bg-white/5 hover:text-white",
-              )}
-            >
-              <Icon className={cn("h-4.5 w-4.5", active ? "text-cyan" : "text-white/60")} />
-              <span className="font-sans text-sm font-medium">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="mt-6 rounded-2xl border border-white/8 bg-white/4 p-4">
-        <div className="text-[11px] uppercase tracking-[0.24em] text-white/45">Built for BCSE335L</div>
-        <div className="mt-2 flex items-center justify-between">
-          <span className="font-mono text-xs text-white/70">Regate v1.0</span>
-          <span className="h-2 w-2 rounded-full bg-safe-green shadow-[0_0_18px_rgba(0,200,150,0.85)]" />
-        </div>
-      </div>
     </>
   );
 }

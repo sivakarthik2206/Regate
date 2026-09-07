@@ -1,287 +1,366 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { motion, useInView } from "framer-motion";
-import {
-  ArrowRight,
-  BarChart3,
-  Brain,
-  Building2,
-  Database,
-  FlaskConical,
-  HeartPulse,
-  Layers3,
-  LineChart,
-  ShieldCheck,
-  Sparkles,
-  Stethoscope,
-  Workflow,
-} from "lucide-react";
+import { motion } from "framer-motion";
+import { useCountUp } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
-const COUNTERS = [
-  { label: "Hospitals", value: 240, suffix: "" },
-  { label: "Penalty Pool", value: 284, suffix: "M" },
-  { label: "Readmission Window", value: 30, suffix: " days" },
-] as const;
-
-const MODEL_ROWS = [
-  { model: "Hospital penalty model", metric: "AUC", value: "0.81" },
-  { model: "Hospital penalty model", metric: "Accuracy", value: "0.76" },
-  { model: "Patient readmission model", metric: "AUC", value: "0.78" },
-  { model: "Patient readmission model", metric: "Accuracy", value: "0.72" },
-  { model: "Penalty severity model", metric: "RMSE", value: "0.32" },
-  { model: "Penalty severity model", metric: "MAE", value: "0.21" },
-] as const;
-
-const STACK = [
-  { name: "Python", icon: FlaskConical, tone: "text-cyan" },
-  { name: "FastAPI", icon: Workflow, tone: "text-safe-green" },
-  { name: "Next.js", icon: Layers3, tone: "text-white" },
-  { name: "scikit-learn", icon: Brain, tone: "text-amber" },
-  { name: "XGBoost", icon: BarChart3, tone: "text-risk-red" },
-  { name: "Vercel", icon: Sparkles, tone: "text-cyan" },
-  { name: "Railway", icon: HeartPulse, tone: "text-safe-green" },
-  { name: "Recharts", icon: LineChart, tone: "text-amber" },
-] as const;
-
-const SOURCES = [
-  {
-    title: "CMS HRRP / Hospital Readmissions PUF",
-    description: "Hospital penalty signals and CMS readmission exposure for the hospital-level predictor.",
-    icon: ShieldCheck,
+const fadeUp = {
+  hidden: { opacity: 0, y: 32 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] },
   },
-  {
-    title: "NHAMCS 2018-2022",
-    description: "Emergency department visit data used to model intake-driven risk signals and patient flow.",
-    icon: Stethoscope,
-  },
-  {
-    title: "Hospital Feature Tables",
-    description: "Processed CMS hospital attributes and condition-level quality indicators.",
-    icon: Building2,
-  },
-  {
-    title: "Training Notebook Outputs",
-    description: "Model comparison summaries, feature importance, and benchmark metrics.",
-    icon: Database,
-  },
-] as const;
+};
 
-export default function AboutPage(): JSX.Element {
+const stagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08 } },
+};
+
+const VIEWPORT = { once: true, amount: 0.1 } as const;
+
+function AnimatedStat({
+  value,
+  prefix = "",
+  suffix = "",
+  label,
+  decimals = 0,
+}: {
+  value: number;
+  prefix?: string;
+  suffix?: string;
+  label: string;
+  decimals?: number;
+}) {
+  const { ref, value: animated } = useCountUp(value, 1400, true);
+  const display = animated.toLocaleString("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
   return (
-    <main className="min-h-screen px-4 py-8 md:px-8 lg:px-10">
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="mx-auto max-w-7xl space-y-8"
-      >
-        <Hero />
-        <ProblemSection />
-        <HowItWorks />
-        <DatasetSources />
-        <PerformanceTable />
-        <TechStack />
-      </motion.div>
-    </main>
-  );
-}
-
-function Hero(): JSX.Element {
-  return (
-    <section className="rounded-[32px] border border-white/8 bg-card-900/90 p-8 shadow-[0_20px_80px_rgba(0,0,0,0.28)] md:p-10">
-      <div className="max-w-3xl space-y-5">
-        <div className="inline-flex items-center gap-2 rounded-full border border-cyan/20 bg-cyan/10 px-3 py-1 text-xs font-semibold text-cyan">
-          <Sparkles className="h-3.5 w-3.5" />
-          Research Project
-        </div>
-        <h1 className="font-display text-5xl font-bold tracking-tight text-white md:text-7xl">Regate</h1>
-        <p className="font-display text-2xl font-medium tracking-tight text-white/90 md:text-3xl">Predict the penalty before it hits</p>
-        <p className="max-w-2xl text-base leading-7 text-white/70 md:text-lg">
-          Built as a healthcare analytics research project - BCSE335L, VIT Chennai.
-        </p>
-      </div>
-    </section>
-  );
-}
-
-function ProblemSection(): JSX.Element {
-  return (
-    <section className="rounded-[32px] border border-white/8 bg-elevated-900/55 p-8">
-      <div className="max-w-3xl">
-        <h2 className="font-display text-3xl font-bold text-white md:text-4xl">The Problem</h2>
-        <p className="mt-4 max-w-3xl text-lg leading-8 text-white/70">
-          240 hospitals face penalties above 1% in FY2026. $284M redistributed annually.
-          The cycle starts at the emergency department door.
-        </p>
-      </div>
-
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        {COUNTERS.map((counter) => (
-          <CounterCard key={counter.label} label={counter.label} value={counter.value} suffix={counter.suffix} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function HowItWorks(): JSX.Element {
-  const steps = [
-    {
-      title: "ED Visit Data",
-      text: "NHAMCS 2018-2022, 130K+ visits/year",
-      icon: Stethoscope,
-    },
-    {
-      title: "ML Models",
-      text: "XGBoost + Neural Networks, AUC > 0.75",
-      icon: Brain,
-    },
-    {
-      title: "Penalty Prediction",
-      text: "Hospital-level risk + patient-level readmission risk",
-      icon: ShieldCheck,
-    },
-  ] as const;
-
-  return (
-    <section className="rounded-[32px] border border-white/8 bg-card-900/90 p-8">
-      <h2 className="font-display text-3xl font-bold text-white md:text-4xl">How It Works</h2>
-      <div className="mt-8 grid gap-4 lg:grid-cols-3">
-        {steps.map((step, index) => {
-          const Icon = step.icon;
-          return (
-            <div key={step.title} className="relative overflow-hidden rounded-[24px] border border-white/8 bg-elevated-900 p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="rounded-2xl border border-cyan/20 bg-cyan/10 p-3 text-cyan">
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div className="text-sm font-mono text-white/35">Step {index + 1}</div>
-              </div>
-              <h3 className="mt-4 font-display text-2xl font-bold text-white">{step.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-white/65">{step.text}</p>
-              {index < steps.length - 1 ? <ArrowRight className="absolute right-4 top-1/2 hidden h-5 w-5 -translate-y-1/2 text-cyan/60 lg:block" /> : null}
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function DatasetSources(): JSX.Element {
-  return (
-    <section className="rounded-[32px] border border-white/8 bg-elevated-900/55 p-8">
-      <h2 className="font-display text-3xl font-bold text-white md:text-4xl">Dataset Sources</h2>
-      <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {SOURCES.map((source) => {
-          const Icon = source.icon;
-          return (
-            <div key={source.title} className="rounded-[24px] border border-white/8 bg-card-900 p-5">
-              <div className="inline-flex rounded-2xl border border-cyan/20 bg-cyan/10 p-3 text-cyan">
-                <Icon className="h-5 w-5" />
-              </div>
-              <h3 className="mt-4 font-display text-xl font-bold text-white">{source.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-white/65">{source.description}</p>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function PerformanceTable(): JSX.Element {
-  return (
-    <section className="rounded-[32px] border border-white/8 bg-card-900/90 p-8">
-      <h2 className="font-display text-3xl font-bold text-white md:text-4xl">Model Performance</h2>
-      <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">
-        Training summary from the current model pipeline. The notebook writes these benchmark fields to `model_metadata.json`.
+    <motion.div
+      ref={ref as React.RefObject<HTMLDivElement>}
+      variants={fadeUp}
+      className="text-center"
+    >
+      <p className="font-display text-5xl font-bold text-white tabular-nums">
+        {prefix}{display}{suffix}
       </p>
+      <p className="mt-2 text-sm text-slate-400">{label}</p>
+    </motion.div>
+  );
+}
 
-      <div className="mt-6 overflow-x-auto rounded-[24px] border border-white/8 bg-elevated-900">
-        <table className="w-full border-collapse text-left">
-          <thead className="border-b border-white/8 text-xs uppercase tracking-[0.22em] text-white/40">
-            <tr>
-              <th className="px-4 py-3">Model</th>
-              <th className="px-4 py-3">Metric</th>
-              <th className="px-4 py-3 text-right">Value</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/8 text-sm">
-            {MODEL_ROWS.map((row) => (
-              <tr key={`${row.model}-${row.metric}`} className="hover:bg-white/5">
-                <td className="px-4 py-3 text-white/85">{row.model}</td>
-                <td className="px-4 py-3 text-white/60">{row.metric}</td>
-                <td className="px-4 py-3 text-right font-mono text-white">{row.value}</td>
-              </tr>
+const TIMELINE_STEPS = [
+  {
+    step: "01",
+    title: "CMS Publishes Excess Readmission Ratios",
+    desc: "Each year, CMS calculates an Excess Readmission Ratio (ERR) for every scored hospital across six conditions. An ERR above 1.0 means a hospital readmits more patients than the national risk-adjusted average.",
+  },
+  {
+    step: "02",
+    title: "Regate Ingests & Normalizes the Data",
+    desc: "We process ERR files, Hospital Compare records, and quality indicators for all 4,812 hospitals tracked by CMS. Features are cleaned, merged, and normalized for model input.",
+  },
+  {
+    step: "03",
+    title: "XGBoost Scores Each Hospital",
+    desc: "Our gradient-boosted classifier predicts penalty probability from readmission rates, star rating, ownership type, and other quality signals — achieving 0.74 AUC-ROC on a held-out validation set.",
+  },
+  {
+    step: "04",
+    title: "Penalty Amount Is Derived",
+    desc: "The statutory penalty formula multiplies the hospital's aggregate excess readmissions against its Medicare payment share, capped at 3% of total payments.",
+  },
+  {
+    step: "05",
+    title: "Hospitals Simulate Improvements",
+    desc: "Teams use the intervention simulator to model the dollar and probability impact of targeted readmission reductions — before committing clinical resources.",
+  },
+];
+
+const DATA_SOURCES = [
+  {
+    name: "CMS HRRP Penalty File",
+    badge: "CMS",
+    records: "1,951 records",
+    desc: "Official penalty amounts and penalization status for all HRRP-eligible hospitals. Primary ground truth for model training.",
+    color: "border-white/[0.12] bg-white/[0.03]",
+    badgeColor: "bg-white/10 text-white",
+  },
+  {
+    name: "Hospital Compare",
+    badge: "CMS",
+    records: "4,812 records",
+    desc: "Star ratings (1–5), ownership classification, emergency services flag, and additional hospital characteristics.",
+    color: "border-white/[0.12] bg-white/[0.03]",
+    badgeColor: "bg-white/10 text-white",
+  },
+  {
+    name: "Excess Readmission Ratios",
+    badge: "CMS",
+    records: "1,951 hospitals × 6 conditions",
+    desc: "Per-condition ERRs and 30-day readmission rates across AMI, Heart Failure, Pneumonia, COPD, Hip/Knee, and CABG.",
+    color: "border-white/[0.12] bg-white/[0.03]",
+    badgeColor: "bg-white/10 text-white",
+  },
+  {
+    name: "Diabetic Readmission Dataset",
+    badge: "UCI ML Repo",
+    records: "101,766 patient records",
+    desc: "10-year patient-level dataset from 130 US hospitals powering the patient-level readmission risk model.",
+    color: "border-amber/30 bg-amber/[0.04]",
+    badgeColor: "bg-amber/15 text-amber",
+  },
+  {
+    name: "AHRQ Quality Indicators",
+    badge: "AHRQ",
+    records: "4,812 records",
+    desc: "Supplemental patient safety and quality indicators used as secondary model features.",
+    color: "border-safe/30 bg-safe/[0.04]",
+    badgeColor: "bg-safe/15 text-safe",
+  },
+];
+
+const MODEL_METRICS = [
+  { label: "AUC-ROC",  value: "0.74",           highlight: true },
+  { label: "Accuracy", value: "67.6%",           highlight: false },
+  { label: "Precision",value: "92.4%",           highlight: false },
+  { label: "Recall",   value: "67.8%",            highlight: false },
+  { label: "F1 Score", value: "78.2%",           highlight: false },
+  { label: "Val. Set", value: "586 hospitals",   highlight: false },
+];
+
+const TECH_STACK = [
+  { name: "Python 3.11",  color: "bg-white/[0.06] text-white/80 border-white/[0.12]" },
+  { name: "FastAPI",      color: "bg-safe/10  text-safe  border-safe/20"  },
+  { name: "XGBoost",     color: "bg-amber/10 text-amber border-amber/20" },
+  { name: "scikit-learn", color: "bg-white/[0.06] text-white/80 border-white/[0.12]" },
+  { name: "pandas",       color: "bg-safe/10  text-safe  border-safe/20"  },
+  { name: "Next.js 14",  color: "bg-white/[0.06] text-white/80 border-white/[0.12]" },
+  { name: "TypeScript",  color: "bg-safe/10  text-safe  border-safe/20"  },
+  { name: "TailwindCSS", color: "bg-amber/10 text-amber border-amber/20" },
+  { name: "Recharts",    color: "bg-white/[0.06] text-white/80 border-white/[0.12]" },
+  { name: "Google Cloud",color: "bg-safe/10  text-safe  border-safe/20"  },
+  { name: "Cloud Run",   color: "bg-amber/10 text-amber border-amber/20" },
+  { name: "BigQuery",    color: "bg-white/[0.06] text-white/80 border-white/[0.12]" },
+];
+
+export default function AboutPage() {
+  return (
+    <div className="space-y-24 pb-24">
+
+      {/* 1 · Hero */}
+      <motion.section
+        variants={fadeUp}
+        initial="hidden"
+        animate="show"
+        className="flex min-h-[40vh] flex-col items-center justify-center text-center"
+      >
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-white/40">
+          About Regate
+        </p>
+        <h1 className="font-display text-5xl font-bold tracking-tight text-white sm:text-6xl">
+          Regate
+          <span className="ml-3 inline-block h-3 w-3 rounded-full bg-safe align-middle" />
+        </h1>
+        <p className="mt-4 max-w-xl text-lg text-white/60">
+          Predictive analytics for hospital readmission penalties
+        </p>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/30">
+          Machine-learning intelligence built on top of CMS Hospital Readmissions Reduction Program data —
+          so hospital teams can see risk before CMS does.
+        </p>
+      </motion.section>
+
+      {/* 2 · The Problem */}
+      <motion.section
+        variants={stagger}
+        initial="hidden"
+        whileInView="show"
+        viewport={VIEWPORT}
+      >
+        <SectionLabel>The Problem We Solve</SectionLabel>
+        <div className="mt-10 grid gap-12 sm:grid-cols-3">
+          <AnimatedStat value={1717} label="Hospitals penalized by CMS (FY2027 projection)" />
+          <AnimatedStat value={193} prefix="$" suffix="M+" label="Estimated total annual Medicare penalties" />
+          <AnimatedStat value={30} suffix=" days" label="Readmission window that determines penalty risk" />
+        </div>
+        <motion.div variants={fadeUp} className="mt-10 card p-6">
+          <p className="text-sm leading-relaxed text-white/50">
+            The CMS Hospital Readmissions Reduction Program (HRRP) reduces Medicare payments to hospitals with
+            higher-than-expected 30-day readmissions across six tracked conditions: Heart Failure, Pneumonia,
+            COPD, Acute Myocardial Infarction, Hip/Knee Replacement, and Coronary Artery Bypass Grafting.
+            Penalties are calculated from{" "}
+            <span className="font-semibold text-white">Excess Readmission Ratios</span> — a risk-adjusted
+            measure that compares each hospital to a national predicted rate. The problem: hospitals don&apos;t
+            know their penalty status until CMS announces it months after the performance period closes.
+            Regate brings that signal forward.
+          </p>
+        </motion.div>
+      </motion.section>
+
+      {/* 3 · How It Works */}
+      <motion.section
+        variants={stagger}
+        initial="hidden"
+        whileInView="show"
+        viewport={VIEWPORT}
+      >
+        <SectionLabel>How It Works</SectionLabel>
+        <div className="mt-10 relative">
+          <div className="absolute left-[19px] top-0 h-full w-px bg-white/[0.08]" />
+          <div className="space-y-8">
+            {TIMELINE_STEPS.map((s, i) => (
+              <motion.div
+                key={s.step}
+                variants={fadeUp}
+                className="relative flex gap-6"
+              >
+                <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black font-mono text-xs font-bold text-white/60">
+                  {s.step}
+                </div>
+                <div className="pt-1.5">
+                  <h3 className="font-display font-semibold text-white">{s.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-white/40">{s.desc}</p>
+                </div>
+              </motion.div>
             ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
+          </div>
+        </div>
+      </motion.section>
 
-function TechStack(): JSX.Element {
-  return (
-    <section className="rounded-[32px] border border-white/8 bg-elevated-900/55 p-8">
-      <h2 className="font-display text-3xl font-bold text-white md:text-4xl">Tech Stack</h2>
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {STACK.map((item) => {
-          const Icon = item.icon;
-          return (
-            <div key={item.name} className="rounded-[24px] border border-white/8 bg-card-900 p-5 transition hover:-translate-y-1 hover:border-cyan/25">
-              <div className={cn("inline-flex rounded-2xl border border-white/8 bg-white/5 p-3", item.tone)}>
-                <Icon className="h-5 w-5" />
+      {/* 4 · Data Sources */}
+      <motion.section
+        variants={stagger}
+        initial="hidden"
+        whileInView="show"
+        viewport={VIEWPORT}
+      >
+        <SectionLabel>Data Sources</SectionLabel>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {DATA_SOURCES.map((src) => (
+            <motion.div
+              key={src.name}
+              variants={fadeUp}
+              className={cn("rounded-2xl border p-5", src.color)}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-display text-sm font-semibold text-white">{src.name}</h3>
+                <span className={cn("shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold", src.badgeColor)}>
+                  {src.badge}
+                </span>
               </div>
-              <div className="mt-4 font-display text-xl font-bold text-white">{item.name}</div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
+              <p className="mt-1 font-mono text-xs text-white/30">{src.records}</p>
+              <p className="mt-2 text-xs leading-relaxed text-white/40">{src.desc}</p>
+            </motion.div>
+          ))}
+        </div>
+      </motion.section>
 
-function CounterCard({ label, value, suffix }: { label: string; value: number; suffix: string }): JSX.Element {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const inView = useInView(ref, { once: true, margin: "-20% 0px" });
-  const count = useCountUp(inView, value);
+      {/* 5 · Model Performance */}
+      <motion.section
+        variants={stagger}
+        initial="hidden"
+        whileInView="show"
+        viewport={VIEWPORT}
+      >
+        <SectionLabel>Model Performance</SectionLabel>
+        <motion.div variants={fadeUp} className="mt-8 card overflow-hidden">
+          <div className="border-b border-white/[0.06] px-5 py-4">
+            <p className="text-sm text-white/40">
+              XGBoost Gradient Boosted Classifier · Validated on 586 HRRP-eligible hospitals (30% deterministic split)
+            </p>
+          </div>
+          <div className="grid divide-y divide-white/[0.06] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            {MODEL_METRICS.map((m) => (
+              <div
+                key={m.label}
+                className={cn(
+                  "flex items-center justify-between px-5 py-4 sm:flex-col sm:items-start sm:gap-1",
+                  m.highlight && "bg-white/[0.03]",
+                )}
+              >
+                <span className="text-xs uppercase tracking-wider text-white/30">{m.label}</span>
+                <span
+                  className={cn(
+                    "font-display text-xl font-bold",
+                    m.highlight ? "text-safe" : "text-white",
+                  )}
+                >
+                  {m.value}
+                  {m.highlight && (
+                    <span className="ml-1.5 rounded-md bg-safe/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-safe">
+                      Best
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      </motion.section>
 
-  return (
-    <div ref={ref} className="rounded-[24px] border border-white/8 bg-card-900 p-5">
-      <div className="text-sm text-white/50">{label}</div>
-      <div className="mt-3 font-display text-5xl font-bold text-white">
-        {count}
-        {suffix}
-      </div>
+      {/* 6 · Tech Stack */}
+      <motion.section
+        variants={stagger}
+        initial="hidden"
+        whileInView="show"
+        viewport={VIEWPORT}
+      >
+        <SectionLabel>Tech Stack</SectionLabel>
+        <motion.div variants={fadeUp} className="mt-8 flex flex-wrap gap-3">
+          {TECH_STACK.map((t, i) => (
+            <motion.span
+              key={t.name}
+              variants={fadeUp}
+              custom={i}
+              className={cn(
+                "rounded-xl border px-4 py-2 text-sm font-medium",
+                t.color,
+              )}
+            >
+              {t.name}
+            </motion.span>
+          ))}
+        </motion.div>
+      </motion.section>
+
+      {/* 7 · Team */}
+      <motion.section
+        variants={fadeUp}
+        initial="hidden"
+        whileInView="show"
+        viewport={VIEWPORT}
+      >
+        <SectionLabel>Team</SectionLabel>
+        <div className="mt-8 card p-8 flex flex-col items-center text-center gap-4 sm:flex-row sm:text-left sm:gap-8">
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-white/[0.06] border border-white/[0.12]">
+            <span className="font-display text-2xl font-bold text-white">SK</span>
+          </div>
+          <div>
+            <h3 className="font-display text-xl font-bold text-white">Siva Karthik</h3>
+            <p className="mt-1 text-sm text-white/50">
+              Full-stack developer and data engineer. Built Regate to make CMS penalty intelligence
+              accessible, transparent, and actionable for hospital administrators and health system leaders.
+            </p>
+          </div>
+        </div>
+      </motion.section>
+
+      <p className="text-center text-xs text-white/20">
+        Regate · Predictions are model-based estimates. Official penalty determinations are made by CMS.
+      </p>
     </div>
   );
 }
 
-function useCountUp(active: boolean, target: number): string {
-  const [value, setValue] = useState(0);
-
-  useEffect(() => {
-    if (!active) {
-      return;
-    }
-    let frame = 0;
-    const duration = 1200;
-    const start = performance.now();
-    const tick = (now: number): void => {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(target * eased));
-      if (progress < 1) {
-        frame = window.requestAnimationFrame(tick);
-      }
-    };
-    frame = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(frame);
-  }, [active, target]);
-
-  return value.toLocaleString();
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">{children}</p>
+      <div className="flex-1 border-t border-white/[0.06]" />
+    </div>
+  );
 }

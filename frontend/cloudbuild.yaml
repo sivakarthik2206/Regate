@@ -1,0 +1,15 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/regate-506903/regate-repo/regate-frontend:v2'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_API_URL=https://regate-backend-1010446445704.us-central1.run.app'
+      - '.'
+images:
+  - 'us-central1-docker.pkg.dev/regate-506903/regate-repo/regate-frontend:v2'
+options:
+  machineType: 'E2_HIGHCPU_8'
+  diskSizeGb: 50
+timeout: '1800s'

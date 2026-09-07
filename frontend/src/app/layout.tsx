@@ -1,49 +1,37 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { PageTransition } from "@/components/providers/PageTransition";
-import { QueryProvider } from "@/components/providers/QueryProvider";
 import "./globals.css";
+import { QueryProvider } from "@/components/providers/QueryProvider";
+import { LenisProvider } from "@/components/providers/LenisProvider";
+import { AppShell } from "@/components/layout/AppShell";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   variable: "--font-display",
+  display: "swap",
 });
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-});
-
-const jetBrainsMono = JetBrains_Mono({
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+const jetbrains = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Regate",
-  description: "Hospital penalty prediction platform for healthcare administrators.",
+  title: "Regate — HRRP Penalty Intelligence",
+  description:
+    "Predict, benchmark and reduce Medicare readmission penalties with model-driven hospital analytics.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: ReactNode;
-}>): JSX.Element {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable} ${jetBrainsMono.variable}`}>
-      <body className="bg-navy text-white/70 antialiased">
-        <div className="min-h-screen bg-navy">
-          <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.045)_1px,transparent_1px)] bg-[size:72px_72px] opacity-25" />
-          <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,_rgba(0,212,255,0.12),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(255,77,109,0.08),_transparent_26%)]" />
-          <Sidebar />
-          <QueryProvider>
-            <main className="relative min-h-screen pb-8 md:pl-[240px]">
-              <PageTransition>{children}</PageTransition>
-            </main>
-          </QueryProvider>
-        </div>
+    <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrains.variable}`}>
+      <body className="min-h-screen bg-black font-sans text-white antialiased">
+        <QueryProvider>
+          <LenisProvider>
+            <AppShell>{children}</AppShell>
+          </LenisProvider>
+        </QueryProvider>
       </body>
     </html>
   );
